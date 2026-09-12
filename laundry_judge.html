@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>今日、洗濯する？ v4</title>
+<title>今日、洗濯する？ v7</title>
 <style>
   :root{
     --bg:#f6f7fb; --card:#fff; --text:#191919; --muted:#707070;
@@ -15,7 +15,7 @@
     background:linear-gradient(180deg,#f7f8fc 0%,#eef1f6 100%); color:var(--text);
     min-height:100vh;
   }
-  .wrap{max-width:800px;margin:0 auto;padding:28px 16px 48px}
+  .wrap{max-width:1360px;margin:0 auto;padding:24px 20px 40px}
   .hero{margin-bottom:18px}
   h1{font-size:34px;line-height:1.15;margin:0 0 8px;letter-spacing:-.02em}
   .sub{margin:0;color:var(--muted);font-size:14px}
@@ -77,13 +77,60 @@
   .metric span{font-size:11px;color:var(--muted)}
   .footer{font-size:12px;color:#8a8a8a;line-height:1.6;padding:8px 4px}
   .tiny{font-size:12px;color:var(--muted);margin-top:4px}
+
+  .secondary{
+    background:#fff;color:var(--accent);border:1px solid #cfd2da;margin-top:8px
+  }
+  .week-result{display:none}
+  .week-head{
+    display:flex;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:12px
+  }
+  .week-head h2{margin:0;font-size:22px}
+  .week-head p{margin:0;color:var(--muted);font-size:12px}
+  .week-grid{
+    display:grid;
+    grid-template-columns:repeat(7,minmax(0,1fr));
+    gap:8px;
+  }
+  @media(max-width:900px){
+    .week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  .day-card{
+    border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff;min-width:0
+  }
+  .day-top{
+    display:block;margin-bottom:8px
+  }
+  .day-date{font-size:14px;font-weight:900}
+  .day-weather{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+  .day-verdict{
+    display:flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 8px;
+    font-size:10px;font-weight:900;white-space:normal;line-height:1.25;margin-top:7px;width:100%;
+    text-align:center
+  }
+  .day-verdict.good{background:#e7f6ef;color:var(--good)}
+  .day-verdict.warn{background:#fff4db;color:var(--warn)}
+  .day-verdict.bad{background:#ffe9e9;color:var(--bad)}
+  .day-items{
+    display:grid;grid-template-columns:1fr;gap:5px
+  }
+  @media(max-width:900px){.day-items{grid-template-columns:repeat(2,1fr)}}
+  .day-item{
+    background:#f7f8fb;border-radius:10px;padding:7px 6px;text-align:center
+  }
+  .day-item span{display:block;font-size:10px;color:var(--muted);margin-bottom:3px}
+  .day-item b{font-size:11px}
+  .day-meta{
+    margin-top:8px;font-size:10px;line-height:1.5;color:#666
+  }
+
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="hero">
     <h1>今日、洗濯する？</h1>
-    <p class="sub">場所だけ入れたら、外干しできる時間と洗濯物ごとの向き不向きをまとめて判定。</p>
+    <p class="sub">場所だけ入れたら、今日の高精度判定と1週間の洗濯予報をまとめて表示。</p>
   </div>
 
   <div class="card">
@@ -93,8 +140,8 @@
       <button id="geoBtn" type="button">現在地</button>
     </div>
     <div class="tiny" id="placeText">姫路市を検索します</div>
-    <button class="primary" id="judgeBtn">今日の洗濯を判定する</button>
-    <div class="status" id="status">通常予報＋気象庁MSMの2系統で判定します。</div>
+    <button class="primary" id="judgeBtn">今日＋1週間の洗濯予報を見る</button>
+    <div class="status" id="status">今日＝通常予報＋気象庁MSM、週間＝通常予報でまとめて判定します。</div>
   </div>
 
   <div class="card result" id="result">
@@ -153,8 +200,19 @@
     </div>
   </div>
 
+
+  <div class="card week-result" id="weekResult">
+    <div class="week-head">
+      <div>
+        <h2>1週間の洗濯予報</h2>
+        <p>先の日ほど予報は変わりやすいので、予定決めの目安として使ってね。</p>
+      </div>
+    </div>
+    <div class="week-grid" id="weekGrid"></div>
+  </div>
+
   <div class="footer">
-    ※外干しのみで判定。通常予報に加えて気象庁MSMを照合し、弱い雨予測は減点、まとまった雨だけ強く反映します。高解像度降水ナウキャストそのものではないため、突発的な超局地雨を完全には拾えません。
+    ※外干しのみで判定。「今日の判定」は通常予報＋気象庁MSMを照合。「1週間予報」は通常予報を使った予定決め用の目安です。先の日ほど予報は変わりやすく、高解像度降水ナウキャストそのものではないため、突発的な超局地雨を完全には拾えません。
   </div>
 </div>
 
@@ -178,7 +236,7 @@ async function fetchWeather(lat, lon){
   const params = new URLSearchParams({
     latitude:lat, longitude:lon, timezone:'auto',
     hourly:'temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,wind_speed_10m,cloud_cover',
-    forecast_days:'2'
+    forecast_days:'7'
   });
   const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if(!r.ok) throw new Error('通常予報の取得に失敗');
@@ -349,6 +407,138 @@ function setPill(id, result){
   el.textContent = result.label;
 }
 
+
+function getDayHours(data, targetDate){
+  const out = [];
+  data.hourly.time.forEach((t,i)=>{
+    const d = new Date(t);
+    if(d.toDateString() === targetDate.toDateString()){
+      out.push({
+        time:d,
+        temp:data.hourly.temperature_2m[i],
+        humidity:data.hourly.relative_humidity_2m[i],
+        rainProb:data.hourly.precipitation_probability[i] ?? 0,
+        rain:data.hourly.precipitation[i] ?? 0,
+        wind:data.hourly.wind_speed_10m[i] ?? 0,
+        cloud:data.hourly.cloud_cover[i] ?? 0
+      });
+    }
+  });
+  return out;
+}
+
+function daylightLaundryHours(hours){
+  return hours.filter(h => {
+    const hr = h.time.getHours();
+    return hr >= 8 && hr <= 18;
+  });
+}
+
+function bestDryRun(hours){
+  let best = [];
+  let current = [];
+  for(const h of hours){
+    const s = hourDryScore(h);
+    const dangerousRain = h.rainProb >= 55 || h.rain >= 0.3;
+    if(!dangerousRain && s >= 45){
+      current.push(h);
+      if(current.length > best.length) best = [...current];
+    }else{
+      current = [];
+    }
+  }
+  return best;
+}
+
+function weeklyDayDecision(hours){
+  const daylight = daylightLaundryHours(hours);
+  if(!daylight.length) return null;
+
+  const window = bestDryRun(daylight);
+  const usable = window.length ? window : daylight;
+
+  const stats = {
+    hours: window.length,
+    maxRain: max(daylight,'rainProb'),
+    totalRain: daylight.reduce((s,x)=>s+(Number(x.rain)||0),0),
+    humidity: avg(usable,'humidity'),
+    wind: avg(usable,'wind'),
+    temp: avg(usable,'temp'),
+    avgScore: avg(usable.map(x=>({score:hourDryScore(x)})),'score'),
+    jmaRisk:'unknown'
+  };
+
+  const items = {
+    thin:itemDecision('thin',stats),
+    towel:itemDecision('towel',stats),
+    denim:itemDecision('denim',stats),
+    bedding:itemDecision('bedding',stats)
+  };
+  const overall = overallDecision(items,stats);
+  return {stats, items, overall};
+}
+
+function shortDayLabel(d, index){
+  const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+  if(index === 0) return `今日 ${d.getMonth()+1}/${d.getDate()}（${wd}）`;
+  if(index === 1) return `明日 ${d.getMonth()+1}/${d.getDate()}（${wd}）`;
+  return `${d.getMonth()+1}/${d.getDate()}（${wd}）`;
+}
+
+function miniItemLabel(result){
+  if(result.level === 'good') return '◎ いける';
+  if(result.level === 'warn') return '△ 微妙';
+  return '× 見送り';
+}
+
+function renderWeek(weather){
+  const grid = document.getElementById('weekGrid');
+  grid.innerHTML = '';
+  const start = new Date();
+
+  for(let i=0;i<7;i++){
+    const d = new Date(start);
+    d.setDate(start.getDate()+i);
+    d.setHours(12,0,0,0);
+
+    const hours = getDayHours(weather,d);
+    const res = weeklyDayDecision(hours);
+    if(!res) continue;
+
+    const {stats,items,overall} = res;
+    const card = document.createElement('div');
+    card.className = 'day-card';
+
+    const verdictText =
+      overall.level === 'good' ? '◎ 洗濯向き' :
+      overall.level === 'warn' ? '△ 条件つき' : '× 見送り';
+
+    card.innerHTML = `
+      <div class="day-top">
+        <div>
+          <div class="day-date">${shortDayLabel(d,i)}</div>
+          <div class="day-weather">降水 ${Math.round(stats.maxRain)}%<br>湿度 ${Math.round(stats.humidity)}% ・ ${stats.temp.toFixed(1)}℃</div>
+        </div>
+        <div class="day-verdict ${overall.level}">${verdictText}</div>
+      </div>
+
+      <div class="day-items">
+        <div class="day-item"><span>薄手</span><b>${miniItemLabel(items.thin)}</b></div>
+        <div class="day-item"><span>タオル</span><b>${miniItemLabel(items.towel)}</b></div>
+        <div class="day-item"><span>デニム</span><b>${miniItemLabel(items.denim)}</b></div>
+        <div class="day-item"><span>シーツ類</span><b>${miniItemLabel(items.bedding)}</b></div>
+      </div>
+
+      <div class="day-meta">
+        外干ししやすい連続時間の目安：約${stats.hours}時間 ／ 平均風速 ${stats.wind.toFixed(1)}km/h
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+
+  document.getElementById('weekResult').style.display='block';
+}
+
 document.getElementById('geoBtn').onclick = () => {
   if(!navigator.geolocation){
     statusEl.textContent='このブラウザは現在地取得に対応していません。';
@@ -373,7 +563,8 @@ cityEl.addEventListener('input',()=>{
 document.getElementById('judgeBtn').onclick = async () => {
   try{
     resultEl.style.display='none';
-    statusEl.textContent='天気を確認中…';
+    document.getElementById('weekResult').style.display='none';
+    statusEl.textContent='今日と1週間の天気を確認中…';
 
     let c = coords;
     if(!c){
@@ -385,6 +576,8 @@ document.getElementById('judgeBtn').onclick = async () => {
       fetchWeather(c.lat,c.lon),
       fetchJmaWeather(c.lat,c.lon)
     ]);
+
+    // ===== 今日の高精度判定（通常予報＋JMA MSM） =====
     const hours = getTodayHours(weather);
     const jmaHours = getTodayJmaHours(jmaWeather);
     if(!hours.length) throw new Error('今日の残り時間の天気データがありません。');
@@ -392,11 +585,10 @@ document.getElementById('judgeBtn').onclick = async () => {
     const jmaRisk = jmaRainRisk(jmaHours);
     let window = findDryWindow(hours);
 
-    // JMAは「即アウト」にはせず、強い雨だけ外干し可能時間を前倒し。
-    // 弱い雨予測は後段のスコア補正だけに使う。
     if(jmaRisk.firstSignificant && jmaRisk.level === 'high'){
       window = window.filter(h => h.time < jmaRisk.firstSignificant);
     }
+
     const usable = window.length ? window : hours.slice(0,1);
 
     const stats = {
@@ -413,7 +605,6 @@ document.getElementById('judgeBtn').onclick = async () => {
       jmaFirstSignificant:jmaRisk.firstSignificant
     };
 
-    // JMAの雨予測は補助情報として穏やかに反映
     if(jmaRisk.level === 'high'){
       stats.maxRain = Math.max(stats.maxRain, 60);
       stats.avgScore -= 18;
@@ -480,11 +671,16 @@ document.getElementById('judgeBtn').onclick = async () => {
     document.getElementById('mTemp').textContent=`${stats.temp.toFixed(1)}℃`;
 
     resultEl.style.display='block';
-    statusEl.textContent=`${c.name}の通常予報＋気象庁MSMで判定しました。`;
+
+    // ===== 1週間予報（通常予報ベース） =====
+    renderWeek(weather);
+
+    statusEl.textContent=`${c.name}の「今日の高精度判定＋1週間予報」を表示しました。`;
   }catch(e){
     statusEl.textContent='エラー：'+e.message;
   }
 };
+
 </script>
 </body>
 </html>
